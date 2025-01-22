@@ -264,20 +264,40 @@ def update_metrics(role, is_selected):
 
 def show_analytics():
     st.header("Recruitment Analytics Dashboard")
+    
+    # Fetch metrics from session state
     metrics = st.session_state.metrics
+    
+    # Display key metrics
     st.metric(label="Total Resumes Uploaded", value=metrics['total_resumes_uploaded'])
     st.metric(label="Total Selected Candidates", value=metrics['selected_candidates'])
     st.metric(label="Total Interviews Scheduled", value=metrics['interviews_scheduled'])
+    
+    # Display role-wise applications
     role_counts = pd.DataFrame({
         'Role': list(metrics['applications_by_role'].keys()),
         'Applications': list(metrics['applications_by_role'].values())
     })
+    
+    st.subheader("Applications by Role")
+    st.dataframe(role_counts)  # Display the role_counts DataFrame as a table
+
     st.subheader("Applications by Role")
     fig = px.bar(role_counts, x='Role', y='Applications', title='Applications per Role')
     st.plotly_chart(fig)
     if metrics['total_resumes_uploaded'] > 0:
         selection_rate = (metrics['selected_candidates'] / metrics['total_resumes_uploaded']) * 100
         st.metric(label="Selection Rate (%)", value=f"{selection_rate:.2f}%")
+def available_timeslots():
+    """Return a list of available interview slots."""
+    current_time = datetime.now()
+    available_slots = [
+        current_time + timedelta(days=3, hours=9),  # Slot 1
+        current_time + timedelta(days=3, hours=11),  # Slot 2
+        current_time + timedelta(days=3, hours=13),  # Slot 3
+        current_time + timedelta(days=3, hours=15),  # Slot 4
+    ]
+    return available_slots
 def available_timeslots():
     """Return a list of available interview slots."""
     current_time = datetime.now()
