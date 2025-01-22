@@ -372,13 +372,11 @@ def show_analytics():
         st.metric(label="Selection Rate (%)", value=f"{selection_rate:.2f}%")
 
 def available_time_slots(selected_date):
-    """Return a list of available interview slots for the selected date in AM/PM format."""
+    """Return a list of available interview slots for the selected date."""
     available_slots = []
-    for hour in range(10, 17):  # From 10 AM to 4 PM
-        time_slot = datetime.combine(selected_date, datetime.min.time()) + timedelta(hours=hour)
-        available_slots.append(time_slot.strftime("%I:%M %p"))  # Format to AM/PM
+    for hour in range(9, 17):  # From 9 AM to 5 PM
+        available_slots.append(datetime.combine(selected_date, datetime.min.time()) + timedelta(hours=hour))
     return available_slots
-
 
 def schedule_zoom_meeting(zoom_acc_id, zoom_client_id, zoom_secret, role, interview_date, company_name):
     """Schedule a Zoom meeting and return the meeting link."""
@@ -442,7 +440,7 @@ def generate_assessment_url(role):
     elif role == "full_stack_engineer":
         return "https://docs.google.com/forms/d/e/1FAIpQLSdz6e0rqTngQIlUJXDKSeUtwmCj7ifIkdGcEHb7rM5YkReLWg/viewform?usp=dialog"
     elif role == "frontend_engineer":
-        return "https://docs.google.com/forms/d/e/1FAIpQLScIMEtmyc6HquDLB7ir0VQWEFOhY5qwf9snYiUoBJwG1x7D_w/viewform?usp=dialog"
+        return "https://docs.google.com/forms/d/e/1FAIpQLScIMEtmyc6HquDLB7ir0VQWEFOhY5qwf9sn YiUoBJwG1x7D_w/viewform?usp=dialog"
     elif role == "backend_engineer":
         return "https://docs.google.com/forms/d/e/1FAIpQLScIMEtmyc6HquDLB7ir0VQWEFOhY5qwf9snYiUoBJwG1x7D_w/viewform?usp=dialog"
     else:
@@ -554,9 +552,12 @@ def main():
         is_selected = st.session_state.is_selected
         if is_selected:
             st.header("Proceed to Interview Scheduling")
+            
             selected_date = st.date_input("Select Interview Date", min_value=datetime.now().date() + timedelta(days=3))
             available_slots = available_time_slots(selected_date)
+
             selected_slot = st.selectbox("Choose your preferred time slot", available_slots)
+
             proceed_selected = st.checkbox("Confirm to Send Email")
             send_button_disabled = not proceed_selected
 
