@@ -93,13 +93,6 @@ def analyze_resume(resume_text: str, role: str) -> tuple[bool, str]:
         """
     return is_selected, feedback
 
-def schedule_interview(is_selected: bool) -> str:
-    """Schedule interview if the candidate is selected."""
-    if is_selected:
-        interview_date = datetime.now() + timedelta(days=3)
-        return f"Scheduled interview for {interview_date.strftime('%Y-%m-%d %H:%M:%S')}"
-    return "Interview not scheduled. The resume does not meet the requirements."
-
 def send_email(sender_email, sender_password, receiver_email, subject, body):
     """Send an email with the given subject and body."""
     msg = MIMEText(body)
@@ -115,7 +108,7 @@ def send_email(sender_email, sender_password, receiver_email, subject, body):
             return "Email sent successfully!"
     except Exception as e:
         logger.error(f"Failed to send email to {receiver_email}: {str(e)}")
-        return f"Failed to send email: {str(e)}"
+        return f"Failed to send email: { str(e)}"
 
 def send_selection_email(candidate_email, role, company_name, sender_email, sender_password):
     """Send selection email to the candidate."""
@@ -226,7 +219,7 @@ def configure_sidebar():
     if st.session_state["reset_config"]:
         st.session_state["sidebar_openai_api_key"] = ""
         st.session_state["sidebar_zoom_account_id"] = ""
-        st.session_state["sidebar_zoom_client_id"] = ""
+        st.session_state[" sidebar_zoom_client_id"] = ""
         st.session_state["sidebar_zoom_client_secret"] = ""
         st.session_state["sidebar_sender_email"] = ""
         st.session_state["sidebar_email_app_password"] = ""
@@ -378,15 +371,11 @@ def show_analytics():
         selection_rate = (metrics['selected_candidates'] / metrics['total_resumes_uploaded']) * 100
         st.metric(label="Selection Rate (%)", value=f"{selection_rate:.2f}%")
 
-def available_timeslots():
-    """Return a list of available interview slots."""
-    current_time = datetime.now()
-    available_slots = [
-        current_time + timedelta(days=3, hours=9),  # Slot 1
-        current_time + timedelta(days=3, hours=11),  # Slot 2
-        current_time + timedelta(days=3, hours=13),  # Slot 3
-        current_time + timedelta(days=3, hours=15),  # Slot 4
-    ]
+def available_time_slots(selected_date):
+    """Return a list of available interview slots for the selected date."""
+    available_slots = []
+    for hour in range(9, 17):  # From 9 AM to 5 PM
+        available_slots.append(datetime.combine(selected_date, datetime.min.time()) + timedelta(hours=hour))
     return available_slots
 
 def schedule_zoom_meeting(zoom_acc_id, zoom_client_id, zoom_secret, role, interview_date, company_name):
@@ -443,7 +432,7 @@ def schedule_zoom_meeting(zoom_acc_id, zoom_client_id, zoom_secret, role, interv
     except Exception as e:
         logger.error(f"Error scheduling Zoom meeting: {str(e)}")
         return None
-    
+
 def generate_assessment_url(role):
     # Generate a unique assessment URL for each role
     if role == "ai_ml_engineer":
@@ -451,7 +440,7 @@ def generate_assessment_url(role):
     elif role == "full_stack_engineer":
         return "https://docs.google.com/forms/d/e/1FAIpQLSdz6e0rqTngQIlUJXDKSeUtwmCj7ifIkdGcEHb7rM5YkReLWg/viewform?usp=dialog"
     elif role == "frontend_engineer":
-        return "https://docs.google.com/forms/d/e/1FAIpQLScIMEtmyc6HquDLB7ir0VQWEFOhY5qwf9snYiUoBJwG1x7D_w/viewform?usp=dialog"
+        return "https://docs.google.com/forms/d/e/1FAIpQLScIMEtmyc6HquDLB7ir0VQWEFOhY5qwf9sn YiUoBJwG1x7D_w/viewform?usp=dialog"
     elif role == "backend_engineer":
         return "https://docs.google.com/forms/d/e/1FAIpQLScIMEtmyc6HquDLB7ir0VQWEFOhY5qwf9snYiUoBJwG1x7D_w/viewform?usp=dialog"
     else:
@@ -464,7 +453,6 @@ def main():
     initialize_metrics()
     st.sidebar.button("Show Analytics", on_click=show_analytics)
 
-    # Define selected_tab here
     selected_tab = st.selectbox("Choose Tab", ["Resume Analysis", "Coding Assessment"])
 
     if st.button("Check Configuration"):
@@ -473,28 +461,22 @@ def main():
         else:
             st.error("Some configurations are missing! Please complete all fields.")
 
-    # Add New Application button
     if st.button("Add New Application"):
-        # Perform both operations (reset resume text and clear)
-        st.session_state.resume_text = ""  # Reset resume text
+        st.session_state.resume_text = ""
         st.success("Ready for a new application!")
-        st.rerun()  # This will rerun the script and clear any UI states
+        st.rerun()
 
-    # Unified Tab Content
     st.header("Resume Analysis and Interview Scheduling")
     
     role = st.selectbox("Enter the role you want to evaluate", 
                         ["Select a role", "ai_ml_engineer", "full_stack_engineer", "frontend_engineer", "backend_engineer"])
 
     if role != "Select a role":
-        # Display Role Requirements
         st.subheader(f"Role Requirements for {role.replace('_', ' ').title()}:")
         st.markdown(ROLE_REQUIREMENTS[role])
 
-        # Collect Competency Ratings
         st.subheader("Please rate the following competencies (1-10 scale):")
         
-        # Define competencies based on the selected role
         competencies = {
             "Technical Skills (Python, PyTorch/TensorFlow)": 0,
             "Machine Learning Algorithms": 0,
@@ -503,7 +485,6 @@ def main():
             "RAG, LLM, Prompt Engineering": 0
         }
 
-        # If the role is not AI/ML Engineer, you can adjust the competencies list.
         if role != "ai_ml_engineer":
             competencies = {
                 "Technical Skills (JavaScript, React.js, Node.js)": 0,
@@ -514,15 +495,12 @@ def main():
             }
 
         for competency in competencies.keys():
-            competencies[competency] = st.slider(competency, 1, 10, 5)  # Rating scale changed to 1-10
+            competencies[competency] = st.slider(competency, 1, 10, 5)
         
-        # Calculate Final Score (out of 10)
         final_score = sum(competencies.values()) / len(competencies)
         
-        # Display Final Score
         st.subheader(f"Final Score for {role.replace('_', ' ').title()}: {final_score:.2f} / 10")
 
-        # Provide Feedback Based on Score
         if final_score >= 8.5:
             feedback = "Excellent candidate, highly skilled in all areas."
         elif final_score >= 7:
@@ -537,7 +515,6 @@ def main():
     if selected_tab == "Coding Assessment":
         role = st.selectbox("Select Role for Assessment", ["ai_ml_engineer", "full_stack_engineer", "frontend_engineer", "backend_engineer"], key="assessment_role_selector")
         if role != "Select a role":
-            # Generate a unique coding assessment URL based on the selected role
             assessment_url = generate_assessment_url(role)
             st.subheader(f"Coding Assessment for {role.replace('_', ' ').title()}")
             st.markdown(f"[Start Coding Assessment]({assessment_url})")
@@ -554,14 +531,14 @@ def main():
 
         if st.button("Analyze Resume"):
             with st.spinner("Analyzing resume..."):
-                time.sleep(5)  # Simulating 5 seconds loading
+                time.sleep(5)
                 is_selected, feedback = analyze_resume(resume_text, role)
-                st.session_state.is_selected = is_selected  # Save selection state in session state
-                st.session_state.feedback = feedback  # Save feedback
+                st.session_state.is_selected = is_selected
+                st.session_state.feedback = feedback
                 if is_selected:
-                    st.success(f"Selected: You are selected", icon="✅")  # Success with green
+                    st.success(f"Selected: You are selected", icon="✅")
                 else:
-                    st.error(f"Selected: Not selected", icon="❌")  # Error with red
+                    st.error(f"Selected: Not selected", icon="❌")
                     update_metrics(role, is_selected)
 
                 st.write(f"Feedback: {feedback}")
@@ -569,18 +546,20 @@ def main():
                     st.success("ALL THE BEST! Proceed to interview scheduling.")
                 else:
                     st.error("Unfortunately, your skills don't match our requirement. Better luck next time!")
-                    # Send rejection email if not selected
                     send_rejection_email(config["sender_email"], config["email_app_password"], candidate_email, role, config["company_name"])
 
-    
-    # Interview Scheduling Tab (Only after resume analysis)
     if 'resume_text' in st.session_state and 'is_selected' in st.session_state:
-        is_selected = st.session_state.is_selected  # Accessing from session state
-        if is_selected:  # Only proceed if the candidate is selected
+        is_selected = st.session_state.is_selected
+        if is_selected:
             st.header("Proceed to Interview Scheduling")
+            
+            selected_date = st.date_input("Select Interview Date", min_value=datetime.now().date() + timedelta(days=3))
+            available_slots = available_time_slots(selected_date)
+
+            selected_slot = st.selectbox("Choose your preferred time slot", available_slots)
+
             proceed_selected = st.checkbox("Confirm to Send Email")
-            interview_selected = st.checkbox("Schedule Interview 📅")
-            send_button_disabled = not (proceed_selected and interview_selected)
+            send_button_disabled = not proceed_selected
 
             if st.button("Send Email and Schedule Interview", disabled=send_button_disabled):
                 if resume_text:
@@ -588,18 +567,16 @@ def main():
                     email_status += send_selection_email(candidate_email, role, config["company_name"], config["sender_email"], config["email_app_password"]) + "\n"
                     
                     if is_selected:
-                        interview_date = datetime.now() + timedelta(days=3)  # Interview in 3 days
                         meeting_link = schedule_zoom_meeting(
                             config["zoom_account_id"],
                             config["zoom_client_id"],
                             config["zoom_client_secret"],
                             role,
-                            interview_date,
+                            selected_slot,
                             config["company_name"]
                         )
                         if meeting_link:
-                            # Send the interview email with the Zoom link included
-                            email_status += send_interview_email(candidate_email, role, interview_date, config["company_name"], config["sender_email"], config["email_app_password"], meeting_link) + "\n"
+                            email_status += send_interview_email(candidate_email, role, selected_slot, config["company_name"], config["sender_email"], config["email_app_password"], meeting_link) + "\n"
                             st.success("Interview scheduling email has been sent to the candidate!")
                         else:
                             st.error("Failed to schedule Zoom meeting. Please check your Zoom credentials.")
