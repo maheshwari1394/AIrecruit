@@ -1,4 +1,5 @@
 import os
+import logging
 from datetime import datetime, timedelta
 import smtplib
 from email.mime.text import MIMEText
@@ -10,7 +11,8 @@ import base64
 import time
 import pandas as pd
 import plotly.express as px
-
+import pytz  # Add this line
+import requests  # Add this line
 
 # Role Requirements
 ROLE_REQUIREMENTS = {
@@ -49,23 +51,9 @@ ROLE_REQUIREMENTS = {
     """
 }
 
-
-# Helper Functions
-def extract_text_from_pdf(pdf_file) -> str:
-    """Extract text from a PDF file."""
-    pdf_reader = PyPDF2.PdfReader(pdf_file)
-    return "".join([page.extract_text() for page in pdf_reader.pages])
-
-def pdf_to_png(pdf_file):
-    """Convert PDF pages to PNG images for display."""
-    pdf_file.seek(0)
-    pdf_bytes = pdf_file.read()
-    doc = fitz.open(stream=pdf_bytes, filetype="pdf")
-    for i in range(doc.page_count):
-        page = doc.load_page(i)
-        pix = page.get_pixmap()
-        img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
-        st.image(img, caption=f"Page {i+1}", use_container_width=True)
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 def match_skills_to_role(resume_text, role):
     """Match candidate's skills to role requirements and calculate match score."""
@@ -123,11 +111,86 @@ def send_email(sender_email, sender_password, receiver_email, subject, body):
             server.starttls()
             server.login(sender_email, sender_password)
             server.sendmail(sender_email, receiver_email, msg.as_string())
+            logger.info(f"Email sent to {receiver_email} with subject: {subject}")
             return "Email sent successfully!"
     except Exception as e:
+        logger.error(f"Failed to send email to {receiver_email}: {str(e)}")
         return f"Failed to send email: {str(e)}"
 
+def send_selection_email(candidate_email, role, company_name, sender_email, sender_password):
+    """Send selection email to the candidate."""
+    subject = "Congratulations! You are Selected for the Next Stage"
+    body = f"""
+        Dear Candidate,
 
+        Congratulations! You meet the requirements for the {role} role at {company_name}.
+        We are excited to invite you to the next stage of the interview process.
+
+        Best Regards,
+        {company_name}
+    """
+    return send_email(sender_email, sender_password, candidate_email, subject, body)
+
+def send_interview_email(candidate_email, role, interview_date, company_name, sender_email, sender_password, meeting_link):
+    """Send interview details email to the candidate."""
+    subject = f"Interview Scheduled for {role} Role"
+    body = f"""
+        Dear Candidate,
+
+        Your interview for the {role} role at {company_name} has been scheduled.
+
+        Interview Details:
+        - Date: {interview_date.strftime('%Y-%m-%d')}
+        - Time: {interview_date.strftime('%H:%M:%S')} (Your Time Zone)
+        - Duration: 45 minutes
+        - Interview Format: Technical interview followed by Q&A
+        - Zoom Meeting Link: {meeting_link}
+
+        Please be prepared to discuss your experience and skills.
+
+        If you have any questions, feel free to reach out to us.
+
+        Best Regards,
+        {company_name}
+    """
+    return send_email(sender_email, sender_password, candidate_email, subject, body)
+
+def send_rejection_email(sender_email, sender_password, receiver_email, role, company) -> None:
+    """Send a rejection email to the candidate."""
+    
+    # Constructing the subject and body of the rejection email
+    subject = f"Regarding your application for the {role} role"
+    
+    body = f"""
+    Dear Candidate,
+    
+    Thank you for your interest in the {role} role at {company}. Unfortunately, we regret to inform you that we will not be proceeding with your application at this time.
+    
+    While we were impressed with your qualifications, we have decided to move forward with other candidates who more closely match the requirements for this role.
+    
+    We encourage you to continue preparing and working hard to improve your skills. Please don't be discouraged—your next opportunity may be just around the corner. We welcome you to apply again for future positions with us.
+
+    We wish you all the best in your career journey.
+    
+    Best regards,
+    {company}
+    """
+
+    # Creating MIMEText object for email
+    msg = MIMEText(body, 'plain', 'utf-8')
+    msg["Subject"] = subject
+    msg["From"] = sender_email
+    msg["To"] = receiver_email
+
+    # Sending the email through Gmail's SMTP server
+    try:
+        with smtplib.SMTP("smtp.gmail.com", 587) as server:
+            server.starttls()  # Start TLS encryption
+            server.login(sender_email, sender_password)  # Login with the sender's credentials
+            server.sendmail(sender_email, receiver_email, msg.as_string())  # Send the email
+            logger.info(f"Rejection email sent to {receiver_email} for role: {role}")
+    except Exception as e:
+        logger.error(f"Failed to send rejection email to {receiver_email}: {str(e)}")
 
 def configure_sidebar():
     """Configure sidebar settings."""
@@ -228,11 +291,33 @@ def configure_sidebar():
 # Call the function
 config = configure_sidebar()
 
+def extract_text_from_pdf(pdf_file) -> str:
+    """Extract text from a PDF file."""
+    pdf_reader = PyPDF2.PdfReader(pdf_file)
+    return "".join([page.extract_text() for page in pdf_reader.pages])
+
+def pdf_to_png(pdf_file):
+    """Convert PDF pages to PNG images for display."""
+    pdf_file.seek(0)
+    pdf_bytes = pdf_file.read()
+    doc = fitz.open(stream=pdf_bytes, filetype="pdf")
+    for i in range(doc.page_count):
+        page = doc.load_page(i)
+        pix = page.get_pixmap()
+        img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
+        st.image(img, caption=f"Page {i+1}", use_container_width=True)
 
 def download_button_with_icon(pdf_file):
     """Display a download button for the resume with an icon."""
+    # Reset the file pointer to the beginning
+    pdf_file.seek(0)
+    
+    # Read the PDF bytes
     pdf_bytes = pdf_file.read()
+    
+    # Encode the PDF bytes to Base64
     encoded_pdf = base64.b64encode(pdf_bytes).decode('utf-8')
+    
     col1, col2 = st.columns([3, 1])
 
     with col1:
@@ -245,12 +330,16 @@ def download_button_with_icon(pdf_file):
             f'<button style="font-size: 16px;">&#8595; Download Resume</button></a>',
             unsafe_allow_html=True
         )
-
+    
+    # Instructions for the user
+    st.markdown("### Instructions:")
+    st.write("After downloading, please open the 'resume.pdf' file to review your resume.")
+    
 def initialize_metrics():
     if 'metrics' not in st.session_state:
         st.session_state.metrics = {
             'total_resumes_uploaded': 0,
-             'selected_candidates': 0,
+            'selected_candidates': 0,
             'interviews_scheduled': 0,
             'applications_by_role': {role: 0 for role in ROLE_REQUIREMENTS}
         }
@@ -288,6 +377,7 @@ def show_analytics():
     if metrics['total_resumes_uploaded'] > 0:
         selection_rate = (metrics['selected_candidates'] / metrics['total_resumes_uploaded']) * 100
         st.metric(label="Selection Rate (%)", value=f"{selection_rate:.2f}%")
+
 def available_timeslots():
     """Return a list of available interview slots."""
     current_time = datetime.now()
@@ -298,42 +388,62 @@ def available_timeslots():
         current_time + timedelta(days=3, hours=15),  # Slot 4
     ]
     return available_slots
-def available_timeslots():
-    """Return a list of available interview slots."""
-    current_time = datetime.now()
-    available_slots = [
-        current_time + timedelta(days=3, hours=9),  # Slot 1
-        current_time + timedelta(days=3, hours=11),  # Slot 2
-        current_time + timedelta(days=3, hours=13),  # Slot 3
-        current_time + timedelta(days=3, hours=15),  # Slot 4
-    ]
-    return available_slots
 
-def schedule_interview_with_candidate(selected_time, candidate_email, role, company_name, sender_email, sender_password):
-    """Send email to candidate with selected interview time."""
-    interview_subject = f"Your Interview Schedule for {role} Role"
-    interview_body = f"""
-        Dear Candidate,
+def schedule_zoom_meeting(zoom_acc_id, zoom_client_id, zoom_secret, role, interview_date, company_name):
+    """Schedule a Zoom meeting and return the meeting link."""
+    try:
+        # Convert the scheduled datetime to UTC for Zoom API
+        local_tz = pytz.timezone("UTC")  # Assuming UTC for simplicity
+        local_dt = local_tz.localize(interview_date, is_dst=None)
+        utc_dt = local_dt.astimezone(pytz.utc)
+        meeting_time_iso = utc_dt.strftime("%Y-%m-%dT%H:%M:%SZ")  # ISO 8601 format
 
-        Your interview for the {role} role at {company_name} has been scheduled.
+        # Step 2: Get Zoom OAuth token
+        zoom_token_url = "https://zoom.us/oauth/token"
+        zoom_payload = {
+            'grant_type': 'account_credentials',
+            'account_id': zoom_acc_id
+        }
+        auth = (zoom_client_id, zoom_secret)
 
-        Interview Details:
-        - Date: {selected_time.strftime('%Y-%m-%d')}
-        - Time: {selected_time.strftime('%H:%M:%S')} (Your Time Zone)
-        - Duration: 45 minutes
-        - Interview Format: Technical interview followed by Q&A
+        token_response = requests.post(zoom_token_url, data=zoom_payload, auth=auth)
+        token_response.raise_for_status()  # This will raise an error for 4xx and 5xx responses
+        access_token = token_response.json().get('access_token')
+        if not access_token:
+            raise ValueError("Failed to fetch Zoom access token.")
 
-        Please be prepared to discuss your experience and skills.
+        # Step 3: Schedule a Zoom meeting
+        zoom_meeting_url = "https://api.zoom.us/v2/users/me/meetings"
+        meeting_details = {
+            "topic": f"Interview for {role}",
+            "type": 2,  # Scheduled meeting
+            "start_time": meeting_time_iso,
+            "duration": 60,  # Meeting duration in minutes
+            "timezone": "UTC",
+            "settings": {
+                "join_before_host": True,
+                "waiting_room": False
+            }
+        }
+        headers = {
+            "Authorization": f"Bearer {access_token}",
+            "Content-Type": "application/json"
+        }
 
-        If you have any questions, feel free to reach out to us.
+        meeting_response = requests.post(zoom_meeting_url, json=meeting_details, headers=headers)
+        meeting_response.raise_for_status()  # This will raise an error for 4xx and 5xx responses
+        meeting_data = meeting_response.json()
+        meeting_link = meeting_data.get('join_url')
 
-        Best Regards,
-        {company_name}
-    """
-    # Send email notification
-    return send_email(sender_email, sender_password, candidate_email, interview_subject, interview_body)
+        if not meeting_link:
+            raise ValueError("Failed to schedule Zoom meeting.")
 
+        return meeting_link
 
+    except Exception as e:
+        logger.error(f"Error scheduling Zoom meeting: {str(e)}")
+        return None
+    
 def generate_assessment_url(role):
     # Generate a unique assessment URL for each role
     if role == "ai_ml_engineer":
@@ -346,6 +456,7 @@ def generate_assessment_url(role):
         return "https://docs.google.com/forms/d/e/1FAIpQLScIMEtmyc6HquDLB7ir0VQWEFOhY5qwf9snYiUoBJwG1x7D_w/viewform?usp=dialog"
     else:
         return "https://coding-assessment-platform.com"
+
 def main():
     st.title("AI Recruitment System")
     st.markdown("Please configure the following in the sidebar: Email Sender, Email Password, Company Name")
@@ -431,7 +542,7 @@ def main():
             st.subheader(f"Coding Assessment for {role.replace('_', ' ').title()}")
             st.markdown(f"[Start Coding Assessment]({assessment_url})")
             st.write("This link will take you to the coding assessment platform with 10 questions based on the selected role.")
-
+    
     resume_file = st.file_uploader("Upload Resume", type=["pdf"])
     if resume_file:
         resume_text = extract_text_from_pdf(resume_file)
@@ -458,6 +569,8 @@ def main():
                     st.success("ALL THE BEST! Proceed to interview scheduling.")
                 else:
                     st.error("Unfortunately, your skills don't match our requirement. Better luck next time!")
+                    # Send rejection email if not selected
+                    send_rejection_email(config["sender_email"], config["email_app_password"], candidate_email, role, config["company_name"])
 
     
     # Interview Scheduling Tab (Only after resume analysis)
@@ -472,75 +585,26 @@ def main():
             if st.button("Send Email and Schedule Interview", disabled=send_button_disabled):
                 if resume_text:
                     email_status = ""
-                    selection_subject = "Congratulations! You are Selected for the Next Stage"
-                    selection_body = f"""
-                            Dear Candidate,
-
-                            Congratulations! You meet the requirements for the {role} role at {config['company_name']}.
-                            We are excited to invite you to the next stage of the interview process.
-
-                            Best Regards,
-                            {config['company_name']}
-                        """
-                    email_status += send_email(config["sender_email"], config["email_app_password"], candidate_email, selection_subject, selection_body) + "\n"
-
+                    email_status += send_selection_email(candidate_email, role, config["company_name"], config["sender_email"], config["email_app_password"]) + "\n"
+                    
                     if is_selected:
                         interview_date = datetime.now() + timedelta(days=3)  # Interview in 3 days
-                        meeting_id = "6113963729"  # Replace with actual meeting ID
-                        password = "769575"  # Replace with the meeting password if applicable
-                        zoom_link = f"https://zoom.us/j/{meeting_id}?pwd={password}"
-
-                        interview_subject = f"Interview Scheduled for {role} Role"
-                        interview_body = f"""
-                            Dear Candidate,
-
-                            Congratulations! You have been selected for an interview for the {role} role at {config['company_name']}.
-
-                            Interview Details:
-                            - Date: {interview_date.strftime('%Y-%m-%d')}
-                            - Time: {interview_date.strftime('%H:%M:%S')} (Your Time Zone)
-                            - Duration: 45 minutes
-                            - Interview Format: Technical interview followed by Q&A
-
-                            Zoom Link:
-                            {zoom_link}
-
-                            Preparation Instructions:
-                            1. Please ensure you have a stable internet connection.
-                            2. Join the interview 5 minutes early.
-                            3. Be prepared to discuss your experience, skills, and problem-solving abilities.
-
-                            If you have any questions or need assistance, feel free to reach out to us.
-
-                            We look forward to meeting you soon!
-
-                            Best Regards,
-                            {config['company_name']}
-                        """
-                        email_status += send_email(config["sender_email"], config["email_app_password"], candidate_email, interview_subject, interview_body) + "\n"
-                        
-                        st.success("Interview scheduling link has been shared with you!")
-                        st.markdown(
-                            """
-                            ### Application Successfully Processed!
-                            Please check your email for:
-                            1. Selection confirmation
-                            2. Interview details with Zoom link
-
-                            Next steps:
-                            1. Review the role requirements
-                            2. Prepare for your technical interview
-                            3. Join the interview 5 minutes early
-                            """
+                        meeting_link = schedule_zoom_meeting(
+                            config["zoom_account_id"],
+                            config["zoom_client_id"],
+                            config["zoom_client_secret"],
+                            role,
+                            interview_date,
+                            config["company_name"]
                         )
-
-                    # Show Calendly scheduling link here
-                    st.markdown(f"[Self-schedule Interview](https://calendly.com/maheshwaripatil1394/airecruit)")
-
-                    # Confirm interview scheduling in the system
-                    st.success("Interview scheduling link has been shared with you!")
+                        if meeting_link:
+                            # Send the interview email with the Zoom link included
+                            email_status += send_interview_email(candidate_email, role, interview_date, config["company_name"], config["sender_email"], config["email_app_password"], meeting_link) + "\n"
+                            st.success("Interview scheduling email has been sent to the candidate!")
+                        else:
+                            st.error("Failed to schedule Zoom meeting. Please check your Zoom credentials.")
+                            
                     update_metrics(role, is_selected)
 
 if __name__ == "__main__":
     main()
-
