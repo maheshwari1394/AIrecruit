@@ -13,7 +13,8 @@ import pandas as pd
 import plotly.express as px
 import pytz  # Add this line
 import requests  # Add this line
-
+import fitz
+print(fitz.__doc__)
 # Role Requirements
 ROLE_REQUIREMENTS = {
     "ai_ml_engineer": """
