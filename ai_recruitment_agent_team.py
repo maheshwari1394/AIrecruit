@@ -14,6 +14,8 @@ import plotly.express as px
 import pytz  # Add this line
 import requests  # Add this line
 import fitz
+
+
 # Role Requirements
 ROLE_REQUIREMENTS = {
     "ai_ml_engineer": """
@@ -329,47 +331,83 @@ def download_button_with_icon(pdf_file):
     st.write("After downloading, please open the 'resume.pdf' file to review your resume.")
     
 def initialize_metrics():
+    """Initialize metrics in session state."""
     if 'metrics' not in st.session_state:
         st.session_state.metrics = {
             'total_resumes_uploaded': 0,
             'selected_candidates': 0,
             'interviews_scheduled': 0,
-            'applications_by_role': {role: 0 for role in ROLE_REQUIREMENTS}
+            'applications_by_role': {role: 0 for role in ROLE_REQUIREMENTS.keys()}
         }
+        
+        # Initialize selected and interviewed counts for each role
+        for role in ROLE_REQUIREMENTS.keys():
+            st.session_state.metrics[f"{role}_selected"] = 0
+            st.session_state.metrics[f"{role}_interviewed"] = 0
 
 def update_metrics(role, is_selected):
+    """Update metrics based on the role and selection status."""
+    if 'metrics' not in st.session_state:
+        logger.error("Metrics not initialized in session state.")
+        return
+
+    # Increment total resumes uploaded
     st.session_state.metrics['total_resumes_uploaded'] += 1
     st.session_state.metrics['applications_by_role'][role] += 1
+
+    # Check if the role-specific keys exist, if not initialize them
+    if f"{role}_selected" not in st.session_state.metrics:
+        st.session_state.metrics[f"{role}_selected"] = 0
+    if f"{role}_interviewed" not in st.session_state.metrics:
+        st.session_state.metrics[f"{role}_interviewed"] = 0
+
     if is_selected:
         st.session_state.metrics['selected_candidates'] += 1
+        st.session_state.metrics[f"{role}_selected"] += 1  # Increment selected for this role
         st.session_state.metrics['interviews_scheduled'] += 1
-
+        st.session_state.metrics[f"{role}_interviewed"] += 1  # Increment interviewed for this role
 def show_analytics():
     st.header("Recruitment Analytics Dashboard")
     
-    # Fetch metrics from session state
+    # Check if metrics exist in session_state
+    if "metrics" not in st.session_state or not st.session_state.metrics:
+        st.error("Metrics data is not available.")
+        return
+
+    # Fetch metrics
     metrics = st.session_state.metrics
     
     # Display key metrics
     st.metric(label="Total Resumes Uploaded", value=metrics['total_resumes_uploaded'])
-    st.metric(label="Total Selected Candidates", value=metrics['selected_candidates'])
-    st.metric(label="Total Interviews Scheduled", value=metrics['interviews_scheduled'])
     
-    # Display role-wise applications
+    # Prepare data for role-wise applications
     role_counts = pd.DataFrame({
         'Role': list(metrics['applications_by_role'].keys()),
-        'Applications': list(metrics['applications_by_role'].values())
+        'Applications': list(metrics['applications_by_role'].values()),
+        'Selected Candidates': [metrics.get(f"{role}_selected", 0) for role in ROLE_REQUIREMENTS],
+        'Interviews Scheduled': [metrics.get(f"{role}_interviewed", 0) for role in ROLE_REQUIREMENTS]
     })
     
     st.subheader("Applications by Role")
-    st.dataframe(role_counts)  # Display the role_counts DataFrame as a table
+    st.dataframe(role_counts)  # Display as table
 
-    st.subheader("Applications by Role")
-    fig = px.bar(role_counts, x='Role', y='Applications', title='Applications per Role')
+    # Plot graph
+    fig = px.bar(
+        role_counts, 
+        x='Role', 
+        y='Applications', 
+        title='Applications per Role', 
+        color='Role', 
+        color_discrete_sequence=px.colors.qualitative.Bold
+    )
     st.plotly_chart(fig)
+
+    # Calculate selection rate
     if metrics['total_resumes_uploaded'] > 0:
         selection_rate = (metrics['selected_candidates'] / metrics['total_resumes_uploaded']) * 100
         st.metric(label="Selection Rate (%)", value=f"{selection_rate:.2f}%")
+    else:
+        st.warning("No resumes uploaded yet.")
 
 def available_time_slots(selected_date):
     """Return a list of available interview slots for the selected date."""
