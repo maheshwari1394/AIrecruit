@@ -66,7 +66,7 @@ pydantic_core==2.27.2
 pydeck==0.9.1
 Pygments==2.18.0
 PyJWT==2.10.1
-PyMuPDF @ file:///C:/Users/Maheshwari%20Patil/Downloads/pymupdf-1.25.2-cp39-abi3-win_amd64.whl#sha256=1b4ca6f5780d319a08dff885a5a0e3585c5d7af04dcfa063c535b88371fd91c1
+PyMuPDF==1.25.2
 pyparsing==3.2.1
 PyPDF2==3.0.1
 pytesseract==0.3.13
