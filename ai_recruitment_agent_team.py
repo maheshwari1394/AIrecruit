@@ -348,7 +348,10 @@ scheduled_interviews = []
 
 def schedule_interview(candidate_email, role, selected_slot):
     """Schedule an interview and store the details."""
-    scheduled_interviews.append({
+    if 'scheduled_interviews' not in st.session_state:
+        st.session_state.scheduled_interviews = []
+    
+    st.session_state.scheduled_interviews.append({
         "Email": candidate_email,
         "Role": role,
         "Date": selected_slot.date(),
@@ -357,9 +360,15 @@ def schedule_interview(candidate_email, role, selected_slot):
 
 def display_scheduled_interviews():
     """Display the scheduled interviews in a table."""
-    if scheduled_interviews:
+    if 'scheduled_interviews' in st.session_state and st.session_state.scheduled_interviews:
         st.subheader("Scheduled Interviews")
-        st.table(scheduled_interviews)
+        
+        # Create a DataFrame to display the scheduled interviews
+        interview_data = st.session_state.scheduled_interviews
+        
+        # Convert to DataFrame for better display
+        interview_df = pd.DataFrame(interview_data)
+        st.table(interview_df)
     else:
         st.write("No interviews scheduled yet.")
 
@@ -620,12 +629,11 @@ def main():
 
             proceed_selected = st.checkbox("Confirm to Send Email")
             send_button_disabled = not proceed_selected
-
+                        
             if st.button("Send Email and Schedule Interview", disabled=send_button_disabled):
                 if resume_text:
                     email_status = ""
                     email_status += send_selection_email(candidate_email, role, config["company_name"], config["sender_email"], config["email_app_password"]) + "\n"
-                    
                     if is_selected:
                         meeting_link = schedule_zoom_meeting(
                             config["zoom_account_id"],
@@ -634,18 +642,13 @@ def main():
                             role,
                             selected_slot,
                             config["company_name"]
-                        )
+                            )
                         if meeting_link:
                             email_status += send_interview_email(candidate_email, role, selected_slot, config["company_name"], config["sender_email"], config["email_app_password"], meeting_link) + "\n"
                             st.success("Interview scheduling email has been sent to the candidate!")
-                            
-                            # Schedule the interview
                             schedule_interview(candidate_email, role, selected_slot)
-                            
                         else:
                             st.error("Failed to schedule Zoom meeting. Please check your Zoom credentials.")
-                            
-                    update_metrics(role, is_selected)
-
+                            update_metrics(role, is_selected)
 if __name__ == "__main__":
     main()
