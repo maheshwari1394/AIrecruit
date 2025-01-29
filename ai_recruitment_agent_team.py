@@ -419,23 +419,28 @@ def show_analytics():
     st.subheader("Applications by Role")
     st.dataframe(role_counts)  # Display as table
 
-    # Plot graph
-    fig = px.bar(
-        role_counts, 
-        x='Role', 
-        y='Applications', 
-        title='Applications per Role', 
-        color='Role', 
-        color_discrete_sequence=px.colors.qualitative.Bold
-    )
-    st.plotly_chart(fig)
+    # Check if role_counts DataFrame is not empty before plotting
+    if not role_counts.empty:
+        # Plot graph
+        fig = px.bar(
+            role_counts, 
+            x='Role', 
+            y='Applications', 
+            title='Applications per Role', 
+            color='Role', 
+            color_discrete_sequence=px.colors.qualitative.Bold
+        )
+        st.plotly_chart(fig)
 
-    # Calculate selection rate
-    if metrics['total_resumes_uploaded'] > 0:
-        selection_rate = (metrics['selected_candidates'] / metrics['total_resumes_uploaded']) * 100
-        st.metric(label="Selection Rate (%)", value=f"{selection_rate:.2f}%")
+        # Calculate selection rate
+        if metrics['total_resumes_uploaded'] > 0:
+            selection_rate = (metrics['selected_candidates'] / metrics['total_resumes_uploaded']) * 100
+            st.metric(label="Selection Rate (%)", value=f"{selection_rate:.2f}%")
+        else:
+            st.warning("No resumes uploaded yet.")
     else:
-        st.warning("No resumes uploaded yet.")
+        st.warning("No applications data available for plotting.")
+
 
     # Display scheduled interviews
     display_scheduled_interviews()
