@@ -13,7 +13,7 @@ import pandas as pd
 import plotly.express as px
 import pytz  # Add this line
 import requests  # Add this line
-
+import fitz
 # Role Requirements
 ROLE_REQUIREMENTS = {
     "ai_ml_engineer": """
@@ -348,10 +348,7 @@ scheduled_interviews = []
 
 def schedule_interview(candidate_email, role, selected_slot):
     """Schedule an interview and store the details."""
-    if 'scheduled_interviews' not in st.session_state:
-        st.session_state.scheduled_interviews = []
-    
-    st.session_state.scheduled_interviews.append({
+    scheduled_interviews.append({
         "Email": candidate_email,
         "Role": role,
         "Date": selected_slot.date(),
@@ -360,15 +357,9 @@ def schedule_interview(candidate_email, role, selected_slot):
 
 def display_scheduled_interviews():
     """Display the scheduled interviews in a table."""
-    if 'scheduled_interviews' in st.session_state and st.session_state.scheduled_interviews:
+    if scheduled_interviews:
         st.subheader("Scheduled Interviews")
-        
-        # Create a DataFrame to display the scheduled interviews
-        interview_data = st.session_state.scheduled_interviews
-        
-        # Convert to DataFrame for better display
-        interview_df = pd.DataFrame(interview_data)
-        st.table(interview_df)
+        st.table(scheduled_interviews)
     else:
         st.write("No interviews scheduled yet.")
 
@@ -419,28 +410,23 @@ def show_analytics():
     st.subheader("Applications by Role")
     st.dataframe(role_counts)  # Display as table
 
-    # Check if role_counts DataFrame is not empty before plotting
-    if not role_counts.empty:
-        # Plot graph
-        fig = px.bar(
-            role_counts, 
-            x='Role', 
-            y='Applications', 
-            title='Applications per Role', 
-            color='Role', 
-            color_discrete_sequence=px.colors.qualitative.Bold
-        )
-        st.plotly_chart(fig)
+    # Plot graph
+    fig = px.bar(
+        role_counts, 
+        x='Role', 
+        y='Applications', 
+        title='Applications per Role', 
+        color='Role', 
+        color_discrete_sequence=px.colors.qualitative.Bold
+    )
+    st.plotly_chart(fig)
 
-        # Calculate selection rate
-        if metrics['total_resumes_uploaded'] > 0:
-            selection_rate = (metrics['selected_candidates'] / metrics['total_resumes_uploaded']) * 100
-            st.metric(label="Selection Rate (%)", value=f"{selection_rate:.2f}%")
-        else:
-            st.warning("No resumes uploaded yet.")
+    # Calculate selection rate
+    if metrics['total_resumes_uploaded'] > 0:
+        selection_rate = (metrics['selected_candidates'] / metrics['total_resumes_uploaded']) * 100
+        st.metric(label="Selection Rate (%)", value=f"{selection_rate:.2f}%")
     else:
-        st.warning("No applications data available for plotting.")
-
+        st.warning("No resumes uploaded yet.")
 
     # Display scheduled interviews
     display_scheduled_interviews()
@@ -634,11 +620,12 @@ def main():
 
             proceed_selected = st.checkbox("Confirm to Send Email")
             send_button_disabled = not proceed_selected
-                        
+
             if st.button("Send Email and Schedule Interview", disabled=send_button_disabled):
                 if resume_text:
                     email_status = ""
                     email_status += send_selection_email(candidate_email, role, config["company_name"], config["sender_email"], config["email_app_password"]) + "\n"
+                    
                     if is_selected:
                         meeting_link = schedule_zoom_meeting(
                             config["zoom_account_id"],
@@ -647,13 +634,18 @@ def main():
                             role,
                             selected_slot,
                             config["company_name"]
-                            )
+                        )
                         if meeting_link:
                             email_status += send_interview_email(candidate_email, role, selected_slot, config["company_name"], config["sender_email"], config["email_app_password"], meeting_link) + "\n"
                             st.success("Interview scheduling email has been sent to the candidate!")
+                            
+                            # Schedule the interview
                             schedule_interview(candidate_email, role, selected_slot)
+                            
                         else:
                             st.error("Failed to schedule Zoom meeting. Please check your Zoom credentials.")
-                            update_metrics(role, is_selected)
+                            
+                    update_metrics(role, is_selected)
+
 if __name__ == "__main__":
     main()
